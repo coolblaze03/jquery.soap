@@ -1,6 +1,6 @@
 /*==========================
 jquery.soap.js  http://plugins.jquery.com/soap/ or https://github.com/doedje/jquery.soap
-version: 1.1.0
+version: 1.1.0.1
 
 jQuery plugin for communicating with a web service using SOAP.
 
@@ -13,6 +13,10 @@ SOAPResponse.toJSON() depends on jQuery.xml2json.js
 
 Authors / History
 -----------------
+
+2013-07-25. Added ability to ignore NamespaceQualifier while still adding xmlns='namespaceURL' to first xml item of JSON parsed params
+Chabli Boler == chabli_boler@hotmail.com
+https://github.com/coolblaze03/jquery.soap
 
 2013-06 >> fix for SOAPServer and SOAPAction headers, better params object to SOAPObject function
 Remy Blom == www.hku.nl == remy.blom@kmt.hku.nl
@@ -77,7 +81,8 @@ options {
 	namespaceQualifier: 'myns',						// used as namespace prefix for all elements in request (optional)
 	namespaceURL: 'urn://service.my.server.com',	// namespace url added to parent request element (optional)
 	elementName: 'requestElementName',				// override 'method' as outer element (optional)
-
+	ignoreQualifier: false,		//Ignores the NamespaceQualifier while still adding NamespaceURL to first element of the parsed JSON to XML params
+	
 	// WS-Security
 	wss: {
 		username: 'user',
@@ -96,6 +101,7 @@ options {
 }
 
 ======================*/
+
 
 (function($) {
 	var enableLogging; // set by config/options
@@ -154,7 +160,14 @@ options {
 			if (!!config.method || !!config.elementName) {
 				var name = !!config.elementName ? config.elementName : config.method;
 				var prefix = !!config.namespaceQualifier ? config.namespaceQualifier+':' : '';//get prefix to show in child elements of complex objects
+				if (config.ignoreQualifier){
+					prefix = '';
+					config.namespaceQualifier = ' ';
+				}
 				var mySoapObject = SOAPTool.json2soap(name, config.params, prefix);
+				if (config.ignoreQualifier){
+					mySoapObject.ignoreQualifier = config.ignoreQualifier;
+				}
 				// fallback for changing namespaceUrl to namespaceURL
 				if (!config.namespaceURL && !!config.namespaceUrl) {
 					warn('jquery.soap: namespaceUrl is deprecated, use namespaceURL instead!');
@@ -370,8 +383,20 @@ options {
 						if(!!soapObj.ns) {
 							if(typeof(soapObj.ns)==="object") {
 								isNSObj=true;
-								out.push("<"+soapObj.ns.name+":"+soapObj.name);
-								out.push(" xmlns:"+soapObj.ns.name+"=\""+soapObj.ns.uri+"\"");
+								
+								if (soapObj.ignoreQualifier){
+									
+									out.push("<"+soapObj.name);
+									out.push(" xmlns=\""+soapObj.ns.uri+"\"");
+									
+								}else{
+								
+									out.push("<"+soapObj.ns.name+":"+soapObj.name);
+									out.push(" xmlns:"+soapObj.ns.name+"=\""+soapObj.ns.uri+"\"");
+								
+								}
+								
+								
 							} else  {
 								out.push("<"+soapObj.name);
 								out.push(" xmlns=\""+soapObj.ns+"\"");
@@ -386,7 +411,12 @@ options {
 							do {
 								cAttr=soapObj.attributes[aLen];
 								if(isNSObj) {
-									out.push(" "+soapObj.ns.name+":"+cAttr.name+"=\""+cAttr.value+"\"");
+									if (soapObj.ignoreQualifier){
+										out.push(" "+cAttr.name+"=\""+cAttr.value+"\"");
+									}else{
+										out.push(" "+soapObj.ns.name+":"+cAttr.name+"=\""+cAttr.value+"\"");
+									}
+									
 								} else {
 									out.push(" "+cAttr.name+"=\""+cAttr.value+"\"");
 								}
@@ -404,7 +434,14 @@ options {
 						//Node Value
 						if(!!soapObj.value){out.push(soapObj.value);}
 						//Close Tag
-						if(isNSObj){out.push("</"+soapObj.ns.name+":"+soapObj.name+">");}
+						if(isNSObj){
+							if (soapObj.ignoreQualifier){
+								out.push("</"+soapObj.name+">");
+							}else{
+								out.push("</"+soapObj.ns.name+":"+soapObj.name+">");
+							}
+							
+						}
 						else {out.push("</"+soapObj.name+">");}
 						return out.join("");
 					}
@@ -495,6 +532,7 @@ options {
 		this.hasChildren=function(){return (this.children.length > 0)?true:false;};
 		this.val=function(v){if(!v){return this.value;}else{this.value=v;return this;}};
 		this.toString=function(){return SOAPTool.soap2xml(this);};
+		this.ignoreQualifier=false;
 	};
 
 	function log(x) {
